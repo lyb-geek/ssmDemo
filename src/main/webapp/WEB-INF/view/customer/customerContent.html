@@ -1,0 +1,36 @@
+<div class="grids">
+	<div class="g12">
+		<div class="table-responsive">
+			<table width="100%" border="0" cellspacing="0" cellpadding="0"
+				class="main">
+				<tbody>
+					<tr id="header" class="bg">
+						<td scope="col" class="p-l-0" style="width: 20%;">客户名称</td>
+						<td scope="col" style="width: 110px">客户所有人</td>
+						<td scope="col" style="width: 12%;">联系人</td>
+						<td scope="col" style="width: 150px;">电话</td>
+						<td scope="col" style="width: 100px;">赢率</td>
+						<td scope="col" style="width: 120px;">掉库时长</td>
+					</tr>
+					<tr v-for="(item, index) in pageList">
+						<td class="p-l-0" id="companyname" :title="item.companyname"><span><a
+								:id="item.customerid" class="js-slidereveal">{{item.companyname}}</a>
+						</span></td>
+						<td :title="item.employeename">{{item.employeename}}</td>
+						<td>{{item.contactname}}</td>
+						<td>{{item.phonenumber}}</span>
+						</td>
+						<td><span
+							:class="{'ico-tag-red': item.winrate==0 || item.winrate==10, 'ico-tag-purple': item.winrate==50, 'ico-tag-blue': item.winrate==70, 'ico-tag-yellow': item.winrate==90, 'ico-tag-green': item.winrate==100}"></span>
+							{{item.winrate}}%</td>
+						<td><span v-if="item.remainoutdays == 1">今天</span> <span
+							v-if="item.remainoutdays == -1 || item.remainoutdays == 0">-</span>
+							<span v-if="item.remainoutdays > 1">{{item.remainoutdays}}</span>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+

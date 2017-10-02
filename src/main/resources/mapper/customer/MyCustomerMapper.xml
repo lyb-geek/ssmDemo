@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ssm.demo.customer.mapper.MyCustomerMapper" >
+	<select id="getIntentCustomerList" resultType="com.ssm.demo.customer.model.IntentCustomer">
+		SELECT 
+		(select t_employee.name from t_employee where t_employee.employeeid = t_customer.employeeid) as employeename,
+		t_customer.*, t_customer_rule.remainoutdays,
+		(
+			SELECT
+				MAX(
+					IFNULL(t_sale_winrate.winrate, 0)
+				) winrate
+			FROM
+				t_sale_winrate
+			INNER JOIN t_sale_opportunity ON t_sale_winrate.salestage = t_sale_opportunity.salestage
+			WHERE
+				t_sale_opportunity.customerid = t_customer.customerid
+		) winrate,
+		(
+			SELECT
+				t_contact.contactname
+			FROM
+				t_contact_phone
+			INNER JOIN t_contact ON t_contact_phone.contactid = t_contact.contactid
+			WHERE
+				t_customer.customerid = t_contact.customerid
+			AND t_contact_phone.phonenumber &lt;&gt; ''
+			LIMIT 0,
+			1
+		) contactname,
+		(
+			SELECT
+				t_contact_phone.phonenumber
+			FROM
+				t_contact_phone
+			INNER JOIN t_contact ON t_contact_phone.contactid = t_contact.contactid
+			WHERE
+				t_customer.customerid = t_contact.customerid
+			AND t_contact_phone.phonenumber &lt;&gt; ''
+			ORDER BY t_contact_phone.updatetime desc
+			LIMIT 0,
+			1
+		) phonenumber
+		
+		FROM
+			t_customer
+		LEFT JOIN t_customer_rule ON t_customer_rule.customerid = t_customer.customerid	
+		
+		<include refid="IntentCustomerSelective"></include>
+		ORDER BY
+			t_customer.createtime DESC
+		<if test="offset != null and pageSize != null">
+			LIMIT ${offset},${pageSize}
+		</if>
+    </select>
+    
+  
+   
+    <sql id="IntentCustomerSelective">
+    	<if test="type == 1">
+			INNER JOIN (
+				SELECT 
+					tbm.employeeid
+				FROM
+					t_branch_match tbm
+				INNER JOIN t_branch_leader tbl ON tbl.branchid = tbm.branchid
+				WHERE
+					tbl.employeeid = #{employeeid}
+				AND tbm.isactive = 0
+				AND (
+					tbl.leaderlevel = 1
+					OR tbl.leaderlevel = - 1
+				) UNION (SELECT #{employeeid} from dual)
+			) A ON A.employeeid = t_customer.employeeid
+		</if>
+		<if test="branchIdlist != null">
+			INNER JOIN (
+				SELECT 
+					tbm.employeeid
+				FROM
+					t_branch_match tbm
+				WHERE
+					 tbm.branchid in ${branchIdlist}
+				AND tbm.isactive = 0
+			) A ON A.employeeid = t_customer.employeeid
+		</if>
+    	WHERE
+			t_customer.isdeal = 1
+		<if test="employeeid != null and employeeid != '' and type != 1">
+			and t_customer.employeeid = #{employeeid}
+		</if>
+		<if test="level != null" >
+	 		AND t_customer.level in ${level}
+	 	</if>
+		<choose>
+			<when test="listType==1">
+				AND t_customer.obtaintime &lt; #{startTimeFrom}
+				AND NOT EXISTS (select 1 from t_customer_call_record x where x.duringtime &gt;= #{duringTimeFrom} and x.customerid = t_customer.customerid and x.employeeid = t_customer.employeeid and x.starttime &gt;= #{startTimeFrom})
+				AND NOT EXISTS (select 1 from t_customer_follow_record z where  z.customerid = t_customer.customerid and z.employeeid = t_customer.employeeid and z.starttime &gt;= #{startTimeFrom})
+			</when>
+			<when test="listType==2">
+				AND t_customer.frommail&lt;&gt;1 AND EXISTS (SELECT 1 FROM t_customer_rule WHERE customerid=t_customer.customerid AND CAST(remainoutdays AS DECIMAL) &lt;=#{outLibraryDayAlert} AND CAST(remainoutdays AS DECIMAL) &gt;= 0)
+			</when>
+		</choose>
+		<if test="keyword != null">
+			AND 
+		 		(
+		 			t_customer.companyname like '%${keyword}%'
+		 			OR EXISTS ( SELECT 1 FROM ( SELECT t_contact.customerid AS customerid FROM t_contact  WHERE t_contact.contactname LIKE '%${keyword}%' OR t_contact.contactemail LIKE '%${keyword}%' ) T WHERE T.customerid = t_customer.customerid )
+					OR EXISTS ( SELECT 1 FROM ( SELECT t_contact.customerid AS customerid FROM t_contact_phone  LEFT JOIN t_contact  ON t_contact.contactid = t_contact_phone.contactid WHERE t_contact_phone.phonenumber LIKE '%${keyword}%' ) T WHERE T.customerid = t_customer.customerid )
+				)
+			
+		</if>
+		<if test="tag != null">
+		AND EXISTS (
+			SELECT
+				GROUP_CONCAT(t_customer_tag.tagid) AS tagStr
+			FROM
+				t_customer_tag
+			WHERE
+				t_customer.customerid = t_customer_tag.customerid
+				HAVING ( 1 =1
+				<foreach collection="tagList" item="item" index="index">
+					 and tagStr like '%${item}%'
+				</foreach>)	
+		)
+		</if>		 
+   </sql>
+   
+   <select id="getDealCustomerList" resultType="com.ssm.demo.customer.model.DealCustomer">
+   		SELECT
+   			(select t_employee.name from t_employee where t_employee.employeeid = t_customer.employeeid) as employeename,
+			t_customer.*,
+			(
+				SELECT
+					t_contact.contactname
+				FROM
+					t_contact_phone
+				INNER JOIN t_contact ON t_contact_phone.contactid = t_contact.contactid
+				WHERE
+					t_customer.customerid = t_contact.customerid
+				AND t_contact_phone.phonenumber &lt;&gt; ''
+				LIMIT 0,
+				1
+			) contactname,
+			(
+				SELECT
+					t_contact_phone.phonenumber
+				FROM
+					t_contact_phone
+				INNER JOIN t_contact ON t_contact_phone.contactid = t_contact.contactid
+				WHERE
+					t_customer.customerid = t_contact.customerid
+				AND t_contact_phone.phonenumber &lt;&gt; ''
+				ORDER BY t_contact_phone.updatetime desc
+				LIMIT 0,
+				1
+			) phonenumber
+		FROM 
+			t_customer
+		<include refid="DealCustomerSelective"/>
+		order by t_customer.updatetime desc
+		<if test="offset != null and pageSize != null">
+		LIMIT ${offset},${pageSize}
+		</if>
+   </select>
+ 
+	
+	<sql id="DealCustomerSelective">
+    	<if test="type == 1">
+			INNER JOIN (
+				SELECT 
+					tbm.employeeid
+				FROM
+					t_branch_match tbm
+				INNER JOIN t_branch_leader tbl ON tbl.branchid = tbm.branchid
+				WHERE
+					tbl.employeeid = #{employeeid}
+				AND tbm.isactive = 0
+				AND (
+					tbl.leaderlevel = 1
+					OR tbl.leaderlevel = - 1
+				) UNION (SELECT #{employeeid} from dual)
+			) A ON A.employeeid = t_customer.employeeid
+		</if>
+		<if test="branchIdlist != null">
+			INNER JOIN (
+				SELECT 
+					tbm.employeeid
+				FROM
+					t_branch_match tbm
+				WHERE
+					 tbm.branchid in ${branchIdlist}
+				AND tbm.isactive = 0
+			) A ON A.employeeid = t_customer.employeeid
+		</if>
+    	WHERE
+			t_customer.isdeal = 0
+		<if test="employeeid != null and employeeid != '' and type != 1">
+			and t_customer.employeeid = #{employeeid}
+		</if>
+		<if test="level != null" >
+	 		AND t_customer.level in ${level}
+	 	</if>
+		<choose>
+			<when test="listType==1">
+				AND t_customer.frommail&lt;&gt;1 AND EXISTS (SELECT 1 FROM t_customer_rule WHERE customerid=t_customer.customerid AND CAST(remainoutdays AS DECIMAL) &lt;=7 AND CAST(remainoutdays AS DECIMAL) &gt;=0)
+			</when>
+		</choose>
+		<if test="keyword != null">
+			AND 
+		 		(
+		 			t_customer.companyname like '%${keyword}%'
+		 			OR EXISTS ( SELECT 1 FROM ( SELECT t_contact.customerid AS customerid FROM t_contact  WHERE t_contact.contactname LIKE '%${keyword}%' OR t_contact.contactemail LIKE '%${keyword}%' ) T WHERE T.customerid = t_customer.customerid )
+					OR EXISTS ( SELECT 1 FROM ( SELECT t_contact.customerid AS customerid FROM t_contact_phone  LEFT JOIN t_contact  ON t_contact.contactid = t_contact_phone.contactid WHERE t_contact_phone.phonenumber LIKE '%${keyword}%' ) T WHERE T.customerid = t_customer.customerid )
+				)
+		</if>
+		<if test="tag != null">
+		AND EXISTS (
+			SELECT
+				GROUP_CONCAT(t_customer_tag.tagid) AS tagStr
+			FROM
+				t_customer_tag
+			WHERE
+				t_customer.customerid = t_customer_tag.customerid
+				HAVING ( 1 =1
+				<foreach collection="tagList" item="item" index="index">
+					 and tagStr like '%${item}%'
+				</foreach>)	
+		)
+		</if>	
+	</sql>
+	
+  
+</mapper>
